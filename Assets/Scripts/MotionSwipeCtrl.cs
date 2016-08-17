@@ -3,6 +3,7 @@
 /// </summary>
 using UnityEngine;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -29,10 +30,13 @@ public class MotionSwipeCtrl : MonoBehaviour, IMotionCallback
     private float validMinMoveLength;
     private float invalidMaxOppositeLength;
 
+    private bool isGestureExecuted;
+
     public void OnTrackingStarted()
     {
         lastHandPosition = motionCtrl.HandPosition;
         isCtrlDisabled = false;
+        isGestureExecuted = false;
     }
     public void OnTrackingStopped()
     {
@@ -61,6 +65,7 @@ public class MotionSwipeCtrl : MonoBehaviour, IMotionCallback
             invalidMaxOppositeLength += OppositeDirectionPerFrameMoveLength;
         }
         isCtrlDisabled = true;
+        isGestureExecuted = false;
     }
     private void Update () {
         if (isCtrlDisabled)
@@ -69,33 +74,43 @@ public class MotionSwipeCtrl : MonoBehaviour, IMotionCallback
         }
         newMovedLength.x = motionCtrl.HandPosition.x - lastHandPosition.x;
         newMovedLength.y = motionCtrl.HandPosition.y - lastHandPosition.y;
-        // 前数フレーム分の移動距離を算出.
-        movedTotalLengthX = Math.Abs(movedLengthList.Select(movedLength => movedLength.x).Sum() + newMovedLength.x);
-        movedTotalLengthY = Math.Abs(movedLengthList.Select(movedLength => movedLength.y).Sum() + newMovedLength.y);
 
-        if (movedTotalLengthX >= movedTotalLengthY)
+        if (! isGestureExecuted)
         {
-            if(movedTotalLengthX >= validMinMoveLength
-                && movedTotalLengthY <= invalidMaxOppositeLength)
+            // 前数Frame分の移動距離を算出.
+            movedTotalLengthX = Math.Abs(movedLengthList.Select(movedLength => movedLength.x).Sum() + newMovedLength.x);
+            movedTotalLengthY = Math.Abs(movedLengthList.Select(movedLength => movedLength.y).Sum() + newMovedLength.y);
+
+            if (movedTotalLengthX >= movedTotalLengthY)
             {
-                Debug.Log("Swipe X Dir");
+                if (movedTotalLengthX >= validMinMoveLength
+                    && movedTotalLengthY <= invalidMaxOppositeLength)
+                {
+                    Debug.Log("Swipe X Dir");
+                    isGestureExecuted = true;
+                    StopDetectingGesture();
+                }
+            }
+            else
+            {
+                if (movedTotalLengthY >= validMinMoveLength
+                    && movedTotalLengthX <= invalidMaxOppositeLength)
+                {
+                    Debug.Log("Swipe Y Dir");
+                    isGestureExecuted = true;
+                    StopDetectingGesture();
+                }
             }
         }
-        else
-        {
-            if (movedTotalLengthY >= validMinMoveLength
-                && movedTotalLengthX <= invalidMaxOppositeLength)
-            {
-                Debug.Log("Swipe Y Dir");
-            }
-        }
-
+        
+        // 値を更新して今Frameの座標値の差分を保存する.
         for (var i = MovedLengthCount; i >= 1; i--)
         {
             movedLengthList[i] = movedLengthList[i - 1];
         }
-        lastHandPosition = motionCtrl.HandPosition;
         movedLengthList[0] = newMovedLength;
+        // 今Frameの座標値を保存する.
+        lastHandPosition = motionCtrl.HandPosition;
     }
     private void Reset()
     {
@@ -103,5 +118,12 @@ public class MotionSwipeCtrl : MonoBehaviour, IMotionCallback
         {
             movedLengthList[i] = DefaultMoveLength;
         }
+        isGestureExecuted = false;
+    }
+    private IEnumerator StopDetectingGesture()
+    {
+        // Swipe実行後は一定時間Swipe操作を無効にする.
+        yield return new WaitForSeconds(0.5f);
+        Reset();
     }
 }
